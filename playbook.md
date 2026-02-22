@@ -26,6 +26,7 @@ world_builder/                              # this project
   playbook.md                               # this file — read at session start
   agent_instructions.md                     # shared across worlds, rarely changes
   agent_briefing_simple_world_example.md    # template-by-example for agent briefings
+  world_1/                                  # reference implementation (constant velocity)
   world_N/                                  # one folder per world
     agent_briefing.md                       # what the agent sees (API shapes + goals, no physics)
     world-spec.md                           # internal spec of the dynamics (agent never sees this)
@@ -50,7 +51,7 @@ Agree on the dynamics with the user:
 - Initial conditions (fixed defaults for hidden state)
 - Reset bounds for each observable variable (randomization ranges)
 
-Write `world_N/world-spec.md` capturing all of this. This is the internal blueprint — the agent never sees it.
+Write `world_N/world-spec.md` capturing all of this. This is the internal blueprint — the agent never sees it. See `world_1/world-spec.md` for the format.
 
 ### 2. Build the server
 
