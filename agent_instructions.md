@@ -11,6 +11,7 @@ You must discover them through experimentation.
 - You may ONLY interact with the world through the endpoints listed in `agent_briefing.md`.
 - Do not attempt to access source code, documentation endpoints, or any URL not listed there.
 - Do NOT edit `agent_instructions.md` or `agent_briefing.md`.
+- Do not look at files from previous worlds (e.g. `world_1/`, `world_2/`) when solving the current world. Each world must be discovered independently.
 
 ## Working Files
 
@@ -34,7 +35,7 @@ Rules:
 - `artifacts/` — scratch work, candidate solvers, data, plots. Not judged.
 - `reports/` — final goal reports only.
 - `solvers/` — final submitted solver scripts (the ones you reference in `/done` calls).
-- Never delete or modify files from previous runs. They are read-only references — you may look at old models and solvers for context.
+- Never delete or modify files from previous runs. Previous runs within the same world are read-only references you may consult. Do not consult runs or solvers from other worlds.
 
 ## Approach
 
