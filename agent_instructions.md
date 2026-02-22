@@ -20,9 +20,11 @@ You may create whatever artifacts you need — notes, exploration scripts, noteb
 
 1. Experiment with the API to discover the world's dynamics and the effect of actions.
 2. Build a predictive model of how the world evolves.
-3. Write a program that uses your model to control the world toward the target.
-4. Execute and verify your program against the actual API.
+3. Use your model to solve the goal — either control the world toward a target (action goal) or predict the outcome of a prescribed experiment (prediction goal).
+4. Execute and verify against the actual API.
 5. After completing each goal, produce a report in the `reports/` folder named by goal number (e.g., `reports/report1.md`, `reports/report2.md`). These reports are for a judge evaluating your results. Report accurately — do not overstate or understate your results.
+
+Note: `/reset` randomizes the observable initial state each time. After every reset, use `/observe` to see your starting conditions.
 
 Reports are final — do not go back and revise earlier reports.
 
@@ -33,9 +35,18 @@ Use this template for each report:
 
 ## Result
 - Goal: [exact goal text]
+- Goal type: [action / prediction]
 - Achieved: [yes/no]
+
+For action goals:
 - Final state: [values of all observable variables]
 - Error: [distance from target]
+
+For prediction goals:
+- Initial state: [observed values after reset]
+- Prediction: [predicted values, in the format specified by the goal]
+- Actual: [observed values after executing the experiment]
+- Prediction error: [difference between predicted and actual]
 
 ## World Model
 - State variables: [list, noting which are observable vs hidden]

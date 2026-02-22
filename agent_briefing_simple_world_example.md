@@ -12,7 +12,7 @@ API base URL: `http://localhost:8080`
 ## Endpoints
 
 ### POST /reset
-Resets the world to its initial conditions. Returns nothing.
+Resets the world to randomized initial conditions. Returns nothing. After resetting, use `/observe` to see your starting state.
 
 Request body: (none)
 
@@ -46,6 +46,13 @@ Response:
 
 This is the only way to see the world's state. Calling it multiple times without advancing gives the same result.
 
-## Goal 1
+### POST /predict
+Records your prediction. Returns nothing. Only used for prediction goals. The request body format is specified in the goal.
+
+## Goal 1 (action)
 
 Reach x = 50.0 (±0) at t = 10. You may experiment freely, but when you execute your solution (after your final `/reset`), you may call `/act` at most once.
+
+## Goal 2 (prediction)
+
+Reset, observe your initial state, then predict what x will be at t = 5 after applying action A = 2.0 at t = 0 with no further actions. Submit your prediction via `/predict` with body `{"x": <float>}` BEFORE executing the experiment. Then perform the experiment (act, advance, observe) and report both your prediction and the actual outcome.

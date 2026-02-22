@@ -22,19 +22,17 @@ When building world N, **only create and edit files inside `world_N/`**. Never m
 ## File Structure
 
 ```
-world_builder/                # this project
-  playbook.md                 # this file — shared, read at session start
-  agent_instructions.md       # shared across worlds, rarely changes
-  enhancements.md             # shared notes / future ideas
-  world_1/                    # one folder per world
-    agent_briefing.md         # what the agent sees (API shapes + goals, no physics)
-    world-spec.md             # internal spec of the dynamics (agent never sees this)
-    server.py                 # the world server (FastAPI, single file)
-    static/index.html         # dashboard UI for manual testing
-    requirements.txt          # Python deps: fastapi, uvicorn, pytest, httpx
-    test_server.py            # pytest tests for the server
-  world_2/
-    ...
+world_builder/                              # this project
+  playbook.md                               # this file — read at session start
+  agent_instructions.md                     # shared across worlds, rarely changes
+  agent_briefing_simple_world_example.md    # template-by-example for agent briefings
+  world_N/                                  # one folder per world
+    agent_briefing.md                       # what the agent sees (API shapes + goals, no physics)
+    world-spec.md                           # internal spec of the dynamics (agent never sees this)
+    server.py                               # the world server (FastAPI, single file)
+    static/index.html                       # dashboard UI for manual testing
+    requirements.txt                        # Python deps: fastapi, uvicorn, pytest, httpx
+    test_server.py                          # pytest tests for the server
 ```
 
 ## Workflow for a New World
@@ -49,7 +47,8 @@ Agree on the dynamics with the user:
 - State variables (observable and hidden)
 - Time evolution rules
 - Actions (names, value ranges, effects)
-- Initial conditions
+- Initial conditions (fixed defaults for hidden state)
+- Reset bounds for each observable variable (randomization ranges)
 
 Write `world_N/world-spec.md` capturing all of this. This is the internal blueprint — the agent never sees it.
 
@@ -59,16 +58,20 @@ Single file `server.py` using FastAPI. Follow the API contract:
 
 | Endpoint | Method | Purpose | Returns |
 |----------|--------|---------|---------|
-| /reset | POST | Reset to initial conditions | Nothing |
+| /reset | POST | Reset to randomized initial conditions | Nothing |
 | /act | POST | Set pending action (no time advance) | Nothing |
 | /advance | POST | Advance time by N steps | Nothing |
 | /observe | GET | Read current state | Observable state |
+| /predict | POST | Record a prediction (prediction goals only) | Nothing |
 
 Key principles:
 - Three orthogonal primitives: control (act), evolve (advance), measure (observe)
 - No endpoint does double duty
 - `/observe` is the ONLY way to get information from the world
+- `/reset` randomizes observable state within world-builder-defined bounds. Hidden state resets to fixed defaults (typically 0). t resets to 0. The agent discovers its starting state via `/observe`.
+- `/predict` records the agent's prediction for prediction goals. Returns nothing. The request shape is defined per goal in the briefing.
 - The pending action is consumed and cleared after each `/advance`. This is an API-level invariant across all worlds. Persistent effects (e.g., constant force) are modeled via hidden state in the world's update equations, not by making actions persist in the API.
+- Server logs all API calls (endpoint, payload, timestamp) for auditing prediction goals.
 - Return 422 for invalid requests (malformed JSON, missing fields, bad types). Never leak internals in error messages.
 - Disable `/docs`, `/redoc`, `/openapi.json` (pass `docs_url=None, redoc_url=None, openapi_url=None` to FastAPI)
 - Print each tick to console for debugging: `t={t} x={x} ...`
@@ -88,12 +91,15 @@ Run: `python3 -m pytest test_server.py -v`
 
 ### 4. Design goals
 
-Design all 3 goals upfront with the user. Hitting them should require a complete and accurate world model. Goals should escalate in difficulty:
-- Goal 1: achievable with a partial or approximate model
-- Goal 2: requires a more complete model (e.g., understanding persistence, hidden state)
-- Goal 3: requires the full correct model, or includes constraints that break incorrect models
+Design goals upfront with the user. Goals can be **action goals** (reach a target state) or **prediction goals** (predict the outcome of a prescribed experiment). Any number, any mix, decided during world building.
 
-All 3 goals are agreed on before the agent starts. Only Goal 1 goes in the initial briefing. Goals 2 and 3 are added after the agent completes the previous one.
+Goals should escalate in difficulty. Early goals should be achievable with a partial model; later goals should require the full correct model or include constraints that break incorrect models.
+
+**Action goals** specify a target state and optional constraints (act budgets, timing). The agent controls the world to hit the target.
+
+**Prediction goals** specify an experiment (action + duration) and ask the agent to predict the outcome before executing. The flow is: reset → observe initial state → predict → execute prescribed experiment → observe outcome. The goal must specify the action so the agent can't reverse-engineer (choose an action that makes its prediction true).
+
+All goals are agreed on before the agent starts. Only Goal 1 goes in the initial briefing. Subsequent goals are added after the agent completes the previous one.
 
 ### 5. Write the briefing
 
@@ -102,9 +108,9 @@ All 3 goals are agreed on before the agent starts. Only Goal 1 goes in the initi
 - Observable state (names and types, no semantics)
 - Endpoint documentation (shapes only, no physics hints)
 - Action name and value range (but NOT what the action does)
-- Goal 1 only (Goals 2 and 3 are held back)
+- Goal 1 only (subsequent goals are held back)
 
-Use the existing briefing as a template. Change the observable state, action names/ranges, and goals to match the new world.
+Use `agent_briefing_simple_world_example.md` as a template. Change the observable state, action names/ranges, and goals to match the new world.
 
 ### 6. Check agent_instructions.md
 
@@ -138,14 +144,18 @@ Monitor the server console to see what the agent is doing (tick logs).
 ### API design
 - Act/advance/observe are orthogonal: control, evolve, measure
 - Only observe returns information — this makes observation count the natural metric
-- No free information leaks (no /history, no /docs, reset/act/advance return nothing)
+- No free information leaks (no /history, no /docs, reset/act/advance/predict return nothing)
+- Reset randomizes observable state within bounds; hidden state and t reset to fixed defaults
+- Server logs all API calls for prediction goal audit
 
 ### Goal design
-- All 3 goals designed upfront, delivered sequentially
-- Escalate to test the model (multi-waypoint, act budgets, timing constraints)
+- Goals designed upfront, delivered sequentially
+- Two types: action goals (reach a target) and prediction goals (predict an outcome)
+- Escalate to test the model (multi-waypoint, act budgets, timing constraints, prediction accuracy)
 - Use constraints that are impossible under incorrect models to force model revision
-- Each goal specifies a tolerance (e.g., `±0` for exact, `±0.5` for approximate). Default to `±0` unless the dynamics make exact targeting unreasonable.
-- Example from world_1: "reach x=50 with at most 1 act call" breaks the additive model, forces discovery of velocity persistence
+- Each action goal specifies a tolerance (e.g., `±0` for exact, `±0.5` for approximate). Default to `±0` unless the dynamics make exact targeting unreasonable.
+- Prediction goals must specify the action the agent performs — the agent does not choose
+- Prediction goal audit: server log must show reset → observe → predict → act/advance → observe (any deviation is a violation)
 
 ### What the agent should NOT know
 - Source code

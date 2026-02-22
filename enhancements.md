@@ -1,1 +1,0 @@
-* we might want to look at ability to predict and not just reach goals. (need to discuss first)
