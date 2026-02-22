@@ -34,6 +34,7 @@ world_builder/                              # this project
     static/index.html                       # dashboard UI for manual testing
     requirements.txt                        # Python deps: fastapi, uvicorn, pytest, httpx
     test_server.py                          # pytest tests for the server
+    submissions/                            # agent goal submissions (auto-created)
 ```
 
 ## Workflow for a New World
@@ -64,6 +65,8 @@ Single file `server.py` using FastAPI. Follow the API contract:
 | /advance | POST | Advance time by N steps | Nothing |
 | /observe | GET | Read current state | Observable state |
 | /predict | POST | Record a prediction (prediction goals only) | Nothing |
+| /bootstrap | GET | Download agent_instructions.md + agent_briefing.md as zip | ZIP file |
+| /done | POST | Agent submits goal completion (solver, report, agent_id) | `{"status": "received"}` |
 
 Key principles:
 - Three orthogonal primitives: control (act), evolve (advance), measure (observe)
@@ -72,7 +75,8 @@ Key principles:
 - `/reset` randomizes observable state within world-builder-defined bounds. Hidden state resets to fixed defaults (typically 0). t resets to 0. The agent discovers its starting state via `/observe`.
 - `/predict` records the agent's prediction for prediction goals. Returns nothing. The request shape is defined per goal in the briefing.
 - The pending action is consumed and cleared after each `/advance`. This is an API-level invariant across all worlds. Persistent effects (e.g., constant force) are modeled via hidden state in the world's update equations, not by making actions persist in the API.
-- Server logs all API calls (endpoint, payload, timestamp) for auditing prediction goals.
+- Server logs all API calls (endpoint, payload, timestamp) for auditing prediction goals. The log is preserved across resets and partitioned by `/done` calls.
+- `/done` captures the agent's submission (goal, agent_id, solver code, command, report) along with the full API trace since the previous `/done`. Submissions are written to `world_N/submissions/goal_{N}_{agent_id}.json`. Duplicate submissions overwrite.
 - Return 422 for invalid requests (malformed JSON, missing fields, bad types). Never leak internals in error messages.
 - Disable `/docs`, `/redoc`, `/openapi.json` (pass `docs_url=None, redoc_url=None, openapi_url=None` to FastAPI)
 - Print each tick to console for debugging: `t={t} x={x} ...`
@@ -105,6 +109,7 @@ All goals are agreed on before the agent starts. Only Goal 1 goes in the initial
 ### 5. Write the briefing
 
 `agent_briefing.md` — the only world-specific document the agent sees. Contains:
+- `World ID` — the numeric world identifier (e.g., `World ID: 2`). The agent uses this to organize its workspace into `world_{id}/run_{m}/` directories.
 - API base URL
 - Observable state (names and types, no semantics)
 - Endpoint documentation (shapes only, no physics hints)
@@ -117,7 +122,7 @@ Use `agent_briefing_simple_world_example.md` as a template. Change the observabl
 
 This file should NOT change between worlds. It contains:
 - General rules (don't cheat, don't edit instructions/briefing)
-- Working files convention (artifacts/ folder)
+- Working files convention (world/run directory structure)
 - Approach (experiment, model, solve, report)
 - Report template
 - Solver versioning guidance
@@ -130,13 +135,21 @@ The agent's project gets exactly two files:
 - `agent_instructions.md`
 - `agent_briefing.md`
 
-The agent creates its own working folders (`artifacts/`, `reports/`) as needed.
+Every world server exposes `GET /bootstrap` which returns a zip of these two files. The agent can pull them with:
+
+```
+curl -s http://localhost:8080/bootstrap -o bootstrap.zip && unzip -o bootstrap.zip && rm bootstrap.zip
+```
+
+The agent reads `World ID` from the briefing and organizes its work into `world_{id}/run_{m}/` directories (with `artifacts/`, `reports/`, `solvers/` inside each run). Each bootstrap creates a new run. Previous runs are preserved as read-only references.
 
 Start the server in this project, then inform the user so they can start the agent.
 
 ### 8. Between rounds
 
-After the agent completes a goal, add the next goal to `agent_briefing.md` and inform the user so they can pass it to the agent. The agent picks it up on the next round.
+The agent signals goal completion by calling `POST /done`. The server writes the submission (including the full API trace) to `world_N/submissions/`. Check the server console for the `DONE` log line.
+
+After the agent completes a goal, add the next goal to `agent_briefing.md`. The agent re-bootstraps to pick up the updated briefing.
 
 Monitor the server console to see what the agent is doing (tick logs).
 

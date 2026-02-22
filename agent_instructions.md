@@ -14,7 +14,27 @@ You must discover them through experimentation.
 
 ## Working Files
 
-You may create whatever artifacts you need — notes, exploration scripts, notebooks, data files, etc. Place all working files in the `artifacts/` folder. These are for your own use and will not be judged.
+Organize all work by world and run using the `World ID` field from `agent_briefing.md`:
+
+```
+world_{id}/
+  run_{m}/
+    artifacts/     # scratch work: exploration scripts, notebooks, data files, plots
+    reports/       # final reports: report1.md, report2.md, ...
+    solvers/       # final submitted solvers: solve_goal1.py, solve_goal2.py, ...
+```
+
+On bootstrap:
+1. Read `World ID` from `agent_briefing.md`.
+2. Create `world_{id}/` if it doesn't exist.
+3. Find the highest existing `run_N/` inside that world folder and create `run_{N+1}/`. If none exist, create `run_1/`.
+4. All work for this session goes inside that run folder.
+
+Rules:
+- `artifacts/` — scratch work, candidate solvers, data, plots. Not judged.
+- `reports/` — final goal reports only.
+- `solvers/` — final submitted solver scripts (the ones you reference in `/done` calls).
+- Never delete or modify files from previous runs. They are read-only references — you may look at old models and solvers for context.
 
 ## Approach
 
@@ -22,7 +42,8 @@ You may create whatever artifacts you need — notes, exploration scripts, noteb
 2. Build a predictive model of how the world evolves.
 3. Use your model to solve the goal — either control the world toward a target (action goal) or predict the outcome of a prescribed experiment (prediction goal).
 4. Execute and verify against the actual API.
-5. After completing each goal, produce a report in the `reports/` folder named by goal number (e.g., `reports/report1.md`, `reports/report2.md`). These reports are for a judge evaluating your results. Report accurately — do not overstate or understate your results.
+5. After completing each goal, produce a report in your run's `reports/` folder named by goal number (e.g., `world_2/run_1/reports/report1.md`). These reports are for a judge evaluating your results. Report accurately — do not overstate or understate your results.
+6. Submit your results by calling `POST /done` with: your goal number, your agent_id (use the model name from your system prompt, e.g. `claude-4.6-opus-high`), your solver code as a string, the command to run it, and the full report markdown. See `agent_briefing.md` for the `/done` endpoint format.
 
 Note: `/reset` randomizes the observable initial state each time. After every reset, use `/observe` to see your starting conditions.
 
@@ -70,6 +91,6 @@ No ASCII plots.
 Example for a 1D world: plot x vs t.]
 ```
 
-Your solver should generalize beyond the current goal — new goals may follow using the same world dynamics. Write your solver so it can achieve subsequent goals without changing code. If a new goal requires code changes, keep the previous solver intact (e.g., `agent_solve.py`) and create a new version (e.g., `agent_solve2.py`).
+Your solver should generalize beyond the current goal — new goals may follow using the same world dynamics. Write your solver so it can achieve subsequent goals without changing code. Place final solvers in your run's `solvers/` folder (e.g., `world_2/run_1/solvers/solve_goal1.py`). If a new goal requires a different solver, create a new file (e.g., `solve_goal2.py`) rather than overwriting.
 
-Goals will be added to `agent_briefing.md` between rounds. You will be told when there are no more goals.
+Goals will be added to `agent_briefing.md` between rounds. Re-run the bootstrap command to get the updated briefing. You will be told when there are no more goals.

@@ -1,5 +1,7 @@
 # Briefing
 
+World ID: N
+
 See `agent_instructions.md` for general rules, approach, and report requirements.
 
 API base URL: `http://localhost:8080`
@@ -48,6 +50,20 @@ This is the only way to see the world's state. Calling it multiple times without
 
 ### POST /predict
 Records your prediction. Returns nothing. Only used for prediction goals. The request body format is specified in the goal.
+
+### POST /done
+Submit your results after completing a goal. Returns `{"status": "received"}`.
+
+Request body:
+```json
+{"goal": <int>, "agent_id": <string>, "solver": <string>, "command": <string>, "report": <string>}
+```
+
+- `goal` — the goal number you completed
+- `agent_id` — your model name from your system prompt (e.g. `"claude-4.6-opus-high"`)
+- `solver` — the full source code of your solver script
+- `command` — the command to run it (e.g. `"python3 world_N/run_1/solvers/solve_goal1.py"`)
+- `report` — your full report markdown
 
 ## Goal 1 (action)
 

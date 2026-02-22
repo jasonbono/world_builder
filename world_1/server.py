@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import io
+import json
 import math
 import os
 import random
 import time
+import zipfile
 
 from fastapi import FastAPI
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 import uvicorn
 
@@ -25,6 +28,7 @@ A_MIN, A_MAX = -5.0, 5.0
 DT = 1.0
 
 api_log: list[dict] = []
+_done_log_start: int = 0
 
 
 def _log(endpoint: str, payload=None):
@@ -51,6 +55,14 @@ class PredictRequest(BaseModel):
     x: float
 
 
+class DoneRequest(BaseModel):
+    goal: int
+    agent_id: str
+    solver: str
+    command: str
+    report: str
+
+
 @app.post("/reset", status_code=204)
 def reset():
     global x, v, t, pending_action
@@ -58,7 +70,6 @@ def reset():
     v = 0.0
     t = 0
     pending_action = None
-    api_log.clear()
     _log("/reset")
     print(f"RESET x={x:.6f}")
 
@@ -101,7 +112,53 @@ def predict(req: PredictRequest):
     print(f"PREDICT x={req.x:.6f}")
 
 
-_static = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+_world_dir = os.path.dirname(os.path.abspath(__file__))
+_submissions_dir = os.path.join(_world_dir, "submissions")
+
+
+@app.post("/done")
+def done(req: DoneRequest):
+    global _done_log_start
+    os.makedirs(_submissions_dir, exist_ok=True)
+    trace = api_log[_done_log_start:]
+    _done_log_start = len(api_log)
+    submission = {
+        "goal": req.goal,
+        "agent_id": req.agent_id,
+        "solver": req.solver,
+        "command": req.command,
+        "report": req.report,
+        "api_trace": trace,
+        "submitted_at": time.time(),
+    }
+    safe_id = req.agent_id.replace("/", "_").replace(" ", "_")
+    filename = f"goal_{req.goal}_{safe_id}.json"
+    path = os.path.join(_submissions_dir, filename)
+    with open(path, "w") as f:
+        json.dump(submission, f, indent=2)
+    print(f"DONE goal={req.goal} agent={req.agent_id} -> {filename}")
+    return {"status": "received"}
+_project_root = os.path.dirname(_world_dir)
+_static = os.path.join(_world_dir, "static")
+
+
+@app.get("/bootstrap")
+def bootstrap():
+    """Return a zip of agent_instructions.md and agent_briefing.md."""
+    files = {
+        "agent_instructions.md": os.path.join(_project_root, "agent_instructions.md"),
+        "agent_briefing.md": os.path.join(_world_dir, "agent_briefing.md"),
+    }
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for arcname, path in files.items():
+            zf.write(path, arcname)
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type="application/zip",
+        headers={"Content-Disposition": "attachment; filename=bootstrap.zip"},
+    )
 
 
 @app.get("/")
