@@ -1,0 +1,47 @@
+{
+  "goal": 2,
+  "agent_id": "claude-4.6-sonnet-medium",
+  "solver": "\"\"\"\nWorld 6 Goal 2 Solver (Prediction)\nPredict x at t=30 after applying A=0.2 at t=0, no further actions.\n\"\"\"\nimport requests\nimport math\n\nBASE = \"http://localhost:8080\"\n\ndef reset():\n    requests.post(f\"{BASE}/reset\")\n    return observe()\n\ndef observe():\n    return requests.get(f\"{BASE}/observe\").json()\n\ndef act(action, value):\n    requests.post(f\"{BASE}/act\", json={\"action\": action, \"value\": value})\n\ndef advance(steps=1):\n    requests.post(f\"{BASE}/advance\", json={\"steps\": steps})\n\ndef predict(x):\n    requests.post(f\"{BASE}/predict\", json={\"x\": x})\n\ndef submit(goal, solver_code, command, report):\n    r = requests.post(f\"{BASE}/done\", json={\n        \"goal\": goal,\n        \"agent_id\": \"claude-4.6-sonnet-medium\",\n        \"solver\": solver_code,\n        \"command\": command,\n        \"report\": report\n    })\n    return r.json()\n\n# Model: A=0.2 applied at t=0 only (then persists, freq grows by 0.2 each step?\n# NO - A applied ONCE: freq(1)=0.2, then no re-application \u2192 freq stays 0.2\n# phase(t) = 0.2 * t, x(t) = sin(0.2*t)\n# At t=30: x = sin(0.2*30) = sin(6)\n\ns = reset()\nprint(f\"Initial: x={s['x']}, t={s['t']}\")\n\npredicted_x = math.sin(0.2 * 30)\nprint(f\"Prediction: x(30) = sin(6) = {predicted_x:.6f}\")\n\n# Submit prediction BEFORE experiment\npredict(predicted_x)\nprint(f\"Prediction submitted: {predicted_x:.6f}\")\n\n# Perform experiment\nact(\"A\", 0.2)  # apply A=0.2 at t=0 only\nadvance(30)\ns = observe()\nprint(f\"Actual: x={s['x']:.6f}, t={s['t']}\")\nprint(f\"Prediction error: {abs(s['x'] - predicted_x):.8f}\")\n",
+  "command": "python3 world_6/run_3/solvers/solve_goal2.py",
+  "report": "# Goal 2 Report\n\n## Result\n- Goal: Predict x at t=30 after applying A=0.2 at t=0, no further actions\n- Goal type: prediction\n- Achieved: yes\n\n### Prediction vs actual\n- Initial state: x=0.0, t=0\n- Prediction: x(30) = sin(6) = -0.279415\n- Actual: x(30) = -0.279415\n- Prediction error: 0.00000000\n\n## World Model\n\n### State variables\n- x (observable): output of sinusoidal oscillator\n- t (observable): discrete time step\n- freq (hidden): angular frequency, persists and accumulates\n- amp (hidden): amplitude, starts at 1\n- phase (hidden): phase, incremented by freq each step\n\n### Update rules\n```\nfreq += pending_A   (pending_A consumed/reset each step)\namp  += pending_B\nphase += freq\nx = amp * sin(phase)\n```\n\nWhen A=0.2 is applied only at t=0 (step 1):\n- Step 1: freq = 0 + 0.2 = 0.2, phase = 0.2, x = sin(0.2)\n- Step 2+: pending_A = 0 (not re-set), freq stays at 0.2 (persists), phase = 0.2*t\n- So x(t) = sin(0.2*t)\n- At t=30: x = sin(0.2*30) = sin(6) = -0.279415\n\n### Free parameters\n- None\n\n### Model changed from previous goal\nNo. Clarified that A persists (does not decay) when not re-set.\n\n## Approach\n\nUsed the established model. A=0.2 applied once causes freq=0.2 to persist indefinitely. Phase grows linearly: phase(t)=0.2t. Thus x(30)=sin(6).\n\n## API Usage\n- Observations: 1 /observe (initial state) + 1 /observe (after experiment) = 2 total\n- Actions: 1 /act call (A=0.2 at t=0)\n- Advances: 1 /advance(30) call\n- Resets: 1 /reset\n\n## Visualization\n![Goal 2 trajectory](../artifacts/goal2_trajectory.png)\n",
+  "api_trace": [
+    {
+      "endpoint": "/reset",
+      "payload": null,
+      "time": 1771815168.7895832
+    },
+    {
+      "endpoint": "/observe",
+      "payload": null,
+      "time": 1771815168.790869
+    },
+    {
+      "endpoint": "/predict",
+      "payload": {
+        "x": -0.27941549819892586
+      },
+      "time": 1771815168.792184
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.2
+      },
+      "time": 1771815168.79326
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 30
+      },
+      "time": 1771815168.794504
+    },
+    {
+      "endpoint": "/observe",
+      "payload": null,
+      "time": 1771815168.795573
+    }
+  ],
+  "submitted_at": 1771815168.797174
+}

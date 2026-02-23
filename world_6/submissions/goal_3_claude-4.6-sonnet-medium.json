@@ -1,0 +1,1180 @@
+{
+  "goal": 3,
+  "agent_id": "claude-4.6-sonnet-medium",
+  "solver": "\"\"\"\nWorld 6 Goal 3 Solver\nReach x = 0.0 (\u00b10.1) at t = 40 AND x = 3.0 (\u00b10.2) at t = 50\n\"\"\"\nimport requests\nimport math\n\nBASE = \"http://localhost:8080\"\n\ndef reset():\n    requests.post(f\"{BASE}/reset\")\n    return observe()\n\ndef observe():\n    return requests.get(f\"{BASE}/observe\").json()\n\ndef act(action, value):\n    requests.post(f\"{BASE}/act\", json={\"action\": action, \"value\": value})\n\ndef advance(steps=1):\n    requests.post(f\"{BASE}/advance\", json={\"steps\": steps})\n\ndef submit(goal, solver_code, command, report):\n    r = requests.post(f\"{BASE}/done\", json={\n        \"goal\": goal,\n        \"agent_id\": \"claude-4.6-sonnet-medium\",\n        \"solver\": solver_code,\n        \"command\": command,\n        \"report\": report\n    })\n    return r.json()\n\n# Model: x(t) = amp(t) * sin(phase(t))\n# freq(t) = A*t (A constant each step), phase(t) = A*t*(t+1)/2\n# amp(t) = 1 + B*t (B constant each step)\n#\n# Goal: x(40)=0 \u2192 sin(phase(40))=0 \u2192 phase(40)=k*pi \u2192 A*820=k*pi \u2192 A=k*pi/820\n# Goal: x(50)=3 \u2192 (1+50B)*sin(A*1275) = 3 \u2192 B = (3/sin(A*1275) - 1) / 50\n#\n# Use k=3 (verified): A=3*pi/820, which gives positive B and amplitude throughout\n\nk = 3\nT1, TARGET1 = 40, 0.0\nT2, TARGET2 = 50, 3.0\n\nA_val = k * math.pi / 820          # = 3*pi/820 \u2248 0.01149\nphase_50 = A_val * T2 * (T2 + 1) / 2\nsin_50 = math.sin(phase_50)\namp_50_needed = TARGET2 / sin_50\nB_val = (amp_50_needed - 1.0) / T2  # \u2248 0.0490\n\ns = reset()\nprint(f\"Initial: x={s['x']}, t={s['t']}\")\nprint(f\"Using A={A_val:.8f}, B={B_val:.8f}\")\n\nfor t in range(1, T2 + 1):\n    act(\"A\", A_val)\n    act(\"B\", B_val)\n    advance(1)\n    if t == T1:\n        s40 = observe()\n\ns50 = observe()\nprint(f\"x(40) = {s40['x']:.6f} (target: {TARGET1} \u00b10.1, ok={abs(s40['x']-TARGET1)<=0.1})\")\nprint(f\"x(50) = {s50['x']:.6f} (target: {TARGET2} \u00b10.2, ok={abs(s50['x']-TARGET2)<=0.2})\")\n",
+  "command": "python3 world_6/run_3/solvers/solve_goal3.py",
+  "report": "# Goal 3 Report\n\n## Result\n- Goal: Reach x = 0.0 (\u00b10.1) at t = 40 AND x = 3.0 (\u00b10.2) at t = 50\n- Goal type: action\n- Achieved: yes\n\n### Final state\n- x(40) = 0.000000 (target: 0.0 \u00b10.1, error: 0.000)\n- x(50) = 3.000000 (target: 3.0 \u00b10.2, error: 0.000)\n- t = 50\n\n## World Model\n\n### State variables\n- x (observable): output of sinusoidal oscillator\n- t (observable): discrete time step\n- freq (hidden): angular frequency accumulator\n- amp (hidden): amplitude accumulator (starts at 1)\n- phase (hidden): phase accumulator\n\n### Update rules\n```\nfreq  += pending_A\namp   += pending_B\nphase += freq\nx = amp * sin(phase)\n```\nWhen A=const and B=const applied every step:\n- freq(t) = A*t\n- phase(t) = A*t*(t+1)/2\n- amp(t) = 1 + B*t\n\n### Free parameters\n- None\n\n### Model changed from previous goal\nNo.\n\n## Approach\n\nTwo constraints:\n1. x(40) = 0 \u2192 sin(phase(40)) = 0 \u2192 phase(40) = k*pi \u2192 A = k*pi/820\n2. x(50) = 3 \u2192 (1 + 50B) * sin(A*1275) = 3 \u2192 B = (3/sin(A*1275) - 1)/50\n\nUsed k=3: A = 3*pi/820 \u2248 0.011494, B \u2248 0.04903. This gives positive amplitude throughout (amp_min \u2248 1.049 at t=1) and achieves both targets exactly.\n\n## API Usage\n- Observations: ~5 during discovery + 2 during scored run (t=40 and t=50)\n- Actions: 50 /act(A) + 50 /act(B) = 100 /act calls\n- Advances: 50 /advance calls\n- Resets: ~10 during exploration + 1 final reset\n\n## Visualization\n![Goal 3 trajectory](../artifacts/goal3_trajectory.png)\n",
+  "api_trace": [
+    {
+      "endpoint": "/reset",
+      "payload": null,
+      "time": 1771815168.798542
+    },
+    {
+      "endpoint": "/observe",
+      "payload": null,
+      "time": 1771815168.7996428
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.801783
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.8032482
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.8044531
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.8055549
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.806705
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.807729
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.809016
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.810267
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.811317
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.812433
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.813527
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.814805
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.8159978
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.817418
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.8191319
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.8206122
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.821632
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.822596
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.823539
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.824557
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.82553
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.8264909
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.827421
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.8284101
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.829391
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.830718
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.8326662
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.834296
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.836048
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.837228
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.838253
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.8393128
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.840201
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.841109
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.842027
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.842956
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.843829
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.8447459
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.845628
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.8466089
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.8475251
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.84848
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.8493881
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.8503559
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.85181
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.852949
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.853834
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.854687
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.8555388
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.856408
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.857296
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.8581839
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.859107
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.8599958
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.860863
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.8617349
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.862596
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.863476
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.864359
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.8652182
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.866137
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.867276
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.868735
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.869807
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.870846
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.8719082
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.87303
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.874021
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.875034
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.8761091
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.877111
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.8781052
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.8790872
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.880086
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.881205
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.882339
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.883539
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.8852491
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.8869288
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.887993
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.889017
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.890081
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.891119
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.892122
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.8931048
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.89407
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.8949308
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.895846
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.896918
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.8979251
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.899015
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.899997
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.901535
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.9029849
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.904047
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.905111
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.906147
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.90717
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.90813
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.909163
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.910083
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.9110742
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.911959
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.912941
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.913918
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.914827
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.9157472
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.916725
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.918661
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.9199739
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.921052
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.9220219
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.923075
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.923968
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.9248981
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.925827
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.9268281
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.9278028
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.928791
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.929708
+    },
+    {
+      "endpoint": "/observe",
+      "payload": null,
+      "time": 1771815168.930654
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.9316611
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.932717
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.93378
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.935359
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.936693
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.9378932
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.9390342
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.940125
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.9411619
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.942534
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.943512
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.9444668
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.94543
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.946451
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.947455
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.94853
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.949537
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.950733
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.9520268
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.953131
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.954148
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.955004
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.955987
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.956953
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.957966
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.959035
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.959984
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "A",
+        "value": 0.011493631659474852
+      },
+      "time": 1771815168.960923
+    },
+    {
+      "endpoint": "/act",
+      "payload": {
+        "action": "B",
+        "value": 0.04902896021071421
+      },
+      "time": 1771815168.961835
+    },
+    {
+      "endpoint": "/advance",
+      "payload": {
+        "steps": 1
+      },
+      "time": 1771815168.962734
+    },
+    {
+      "endpoint": "/observe",
+      "payload": null,
+      "time": 1771815168.963778
+    }
+  ],
+  "submitted_at": 1771815168.96574
+}
